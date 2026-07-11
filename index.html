@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DrawableForge</title>
+  <link rel="icon" type="image/svg+xml" href="img/logo.svg">
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <section class="hero">
+    <div class="brand">
+      <img class="logo" src="img/logo.svg" alt="DrawableForge">
+      <h1>DrawableForge</h1>
+    </div>
+    <p class="lead">
+      One image forged into every density.
+      <button class="theme-toggle" id="darkModeBtn" type="button" aria-label="Toggle dark mode">
+        <span id="themeIcon">&#x2600;</span>
+      </button>
+    </p>
+  </section>
+
+  <section class="workspace">
+    <label class="dropzone" id="dropzone">
+      <input id="fileInput" type="file" accept=".png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif">
+      <div class="dropzone-card" id="dropzoneCard">
+        <div class="icon">+</div>
+        <strong>Drag and drop an image</strong>
+        <p>PNG, JPEG, WebP, or GIF. You can also click to browse.</p>
+        <div class="file-pill" id="filePill"></div>
+      </div>
+      <div class="preview" id="preview"><img id="previewImg" alt="Preview"></div>
+      <p class="dropzone-hint" id="dropzoneHint">Click the box or drag &amp; drop to choose a different image.</p>
+    </label>
+
+    <form class="controls" id="convertForm">
+      <h2>Output</h2>
+
+      <div class="field">
+        <label for="outputName">Resource name</label>
+        <input id="outputName" name="output_name" type="text" placeholder="Optional">
+      </div>
+
+      <div class="field">
+        <label for="sourceDensity">Source density</label>
+        <select id="sourceDensity" name="source_density">
+          <option value="ldpi">ldpi (0.75x)</option>
+          <option value="mdpi">mdpi (1x)</option>
+          <option value="hdpi">hdpi (1.5x)</option>
+          <option value="xhdpi">xhdpi (2x)</option>
+          <option value="xxhdpi">xxhdpi (3x)</option>
+          <option value="xxxhdpi" selected>xxxhdpi (4x)</option>
+        </select>
+      </div>
+
+      <div class="toggle">
+        <div class="toggle-copy">
+          <strong>Lossless WebP</strong>
+          <span>Turn off for smaller lossy files.</span>
+        </div>
+        <button class="switch" id="losslessSwitch" type="button" role="switch" aria-checked="true"
+          aria-label="Toggle lossless WebP" data-enabled="true"></button>
+      </div>
+
+      <div class="toggle">
+        <div class="toggle-copy">
+          <strong>Night drawables</strong>
+          <span>Generates drawable-night-* directories instead of drawable-*.</span>
+        </div>
+        <button class="switch" id="nightSwitch" type="button" role="switch" aria-checked="false"
+          aria-label="Toggle night drawables" data-enabled="false"></button>
+      </div>
+
+      <div class="field">
+        <label for="quality">Lossy quality</label>
+        <input id="quality" name="quality" type="number" min="0" max="100" value="90">
+      </div>
+
+      <div class="actions">
+        <button class="primary" id="convertButton" type="submit">Convert and download</button>
+      </div>
+    </form>
+  </section>
+
+  <script src="vendor/jszip.min.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+
+</html>
