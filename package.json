@@ -1,0 +1,10 @@
+{
+  "name": "drawableforge",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Client-side image-to-Android-WebP-drawables converter",
+  "scripts": {
+    "test": "node --test"
+  }
+}

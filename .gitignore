@@ -1,0 +1,23 @@
+# Go build artifacts
+/bin
+/drawableforge
+/devserver
+*.exe
+*.test
+
+# Node
+node_modules/
+*.log
+
+# Local plans / scratch docs
+plan/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*~
+*.swp
+
+# Local env
+.env
