@@ -30,7 +30,7 @@ function applyTheme(theme) {
   } else {
     document.documentElement.removeAttribute("data-theme");
   }
-  if (themeIcon) themeIcon.textContent = isDark ? "🌙" : "☀️";
+  if (themeIcon) themeIcon.src = isDark ? "img/moon.svg" : "img/sun.svg";
 }
 
 (function initTheme() {

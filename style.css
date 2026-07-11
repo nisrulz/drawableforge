@@ -63,6 +63,15 @@ body {
   transform: none;
 }
 
+.theme-toggle:hover #themeIcon {
+  animation: spin 6s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .theme-toggle:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px var(--accent-soft);
@@ -84,6 +93,7 @@ body {
 .logo {
   width: 1.6rem;
   height: 1.6rem;
+  color: #6b7280;
 }
 
 h1 {
@@ -364,6 +374,10 @@ button.primary:disabled {
   color: var(--text);
 }
 
+[data-theme="dark"] .logo {
+  color: var(--accent);
+}
+
 [data-theme="dark"] .dropzone,
 [data-theme="dark"] .controls {
   background: rgba(255, 255, 255, 0.05);
@@ -389,6 +403,18 @@ button.primary:disabled {
 
 [data-theme="dark"] .toggle {
   background: rgba(255, 255, 255, 0.05);
+}
+
+.toggle:has(.switch[data-enabled="false"]) .toggle-copy {
+  opacity: 0.6;
+}
+
+.toggle:has(.switch[data-enabled="true"]) {
+  background: rgba(15, 118, 110, 0.12);
+}
+
+[data-theme="dark"] .toggle:has(.switch[data-enabled="true"]) {
+  background: rgba(15, 118, 110, 0.18);
 }
 
 [data-theme="dark"] .icon {
