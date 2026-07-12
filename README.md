@@ -2,7 +2,7 @@
 
 One image forged into every density.
 
-![Screenshot](screenshot.jpg)
+![Hero](img/github_banner.jpg)
 
 Converts a single image into zipped Android WebP drawables for every density, from ldpi to xxxhdpi. Runs entirely in the browser. Nothing leaves your machine.
 
@@ -34,6 +34,10 @@ Static files only. Serve the repo root over HTTP or publish via GitHub Pages. No
 ## Developer docs
 
 Architecture, tests, and the dev server: [`DEV.md`](DEV.md).
+
+## Screenshot
+
+![Screenshot](screenshot.jpg)
 
 ## License
 
