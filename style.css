@@ -346,6 +346,21 @@ h1 {
   gap: 8px;
 }
 
+.status-message {
+  margin: 0;
+  font-size: 0.8rem;
+  text-align: center;
+  color: var(--accent-strong);
+}
+
+.status-message.error {
+  color: #b3261e;
+}
+
+[data-theme="dark"] .status-message.error {
+  color: #ff8a80;
+}
+
 button {
   border: 0;
   border-radius: 14px;

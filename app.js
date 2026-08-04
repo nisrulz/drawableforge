@@ -1,6 +1,9 @@
-import { DENSITY_FACTORS, drawableDirectoryName, isDensityName } from "./js/density.js";
-import { SUPPORTED_EXTENSIONS, fileExtension, fileStem, sanitizeResourceName } from "./js/naming.js";
-import { loadImageElement, renderDensity } from "./js/encoding.js";
+import { drawableDirectoryName } from "./js/density.js";
+import { SUPPORTED_EXTENSIONS, fileExtension, fileStem } from "./js/naming.js";
+import { parseOptions } from "./js/options.js";
+import { encodeAllDensities, loadImageElement } from "./js/encoding.js";
+import { buildZipArchive, downloadBlob, zipFileName } from "./js/zip.js";
+import { applyTheme, currentTheme, nextTheme, resolveTheme, THEME_KEY } from "./js/theme.js";
 
 // --- DOM refs ---
 const dropzone = document.getElementById("dropzone");
@@ -19,36 +22,24 @@ const themeIcon = document.getElementById("themeIcon");
 const qualityInput = document.getElementById("quality");
 const outputName = document.getElementById("outputName");
 const sourceDensitySelect = document.getElementById("sourceDensity");
+const statusMessage = document.getElementById("statusMessage");
 
 let previewUrl = null;
 
 // --- theme ---
-function applyTheme(theme) {
-  const isDark = theme === "dark";
-  if (isDark) {
-    document.documentElement.setAttribute("data-theme", "dark");
-  } else {
-    document.documentElement.removeAttribute("data-theme");
-  }
-  if (themeIcon) themeIcon.src = isDark ? "img/moon.svg" : "img/sun.svg";
-}
-
 (function initTheme() {
-  applyTheme(localStorage.getItem("theme") || "light");
+  applyTheme(resolveTheme(localStorage.getItem(THEME_KEY)), document.documentElement, themeIcon);
 })();
 
-if (darkModeBtn) {
-  darkModeBtn.addEventListener("click", function () {
-    const isDark = document.documentElement.getAttribute("data-theme") !== "dark";
-    const theme = isDark ? "dark" : "light";
-    applyTheme(theme);
-    localStorage.setItem("theme", theme);
-  });
-}
+darkModeBtn.addEventListener("click", () => {
+  const theme = nextTheme(currentTheme(document.documentElement));
+  applyTheme(theme, document.documentElement, themeIcon);
+  localStorage.setItem(THEME_KEY, theme);
+});
 
-// --- toggle switches (composition over repetition) ---
+// --- toggle switches ---
 function setupToggle(button, onChange) {
-  button.addEventListener("click", function () {
+  button.addEventListener("click", () => {
     const next = button.dataset.enabled !== "true";
     button.dataset.enabled = next ? "true" : "false";
     button.setAttribute("aria-checked", next ? "true" : "false");
@@ -65,6 +56,13 @@ function updateQualityState() {
 setupToggle(losslessSwitch, updateQualityState);
 setupToggle(nightSwitch);
 updateQualityState();
+
+// --- status messages ---
+function setStatus(message, isError = false) {
+  statusMessage.textContent = message;
+  statusMessage.classList.toggle("error", isError);
+  statusMessage.hidden = !message;
+}
 
 // --- file selection ---
 function selectedFile() {
@@ -93,24 +91,25 @@ function refreshSelection() {
   preview.classList.add("visible");
   previewHint.classList.add("visible");
   dropzoneCard.classList.add("hidden");
+  setStatus("");
 }
 
 // --- drag & drop ---
-["dragenter", "dragover"].forEach(function (eventName) {
-  dropzone.addEventListener(eventName, function (event) {
+["dragenter", "dragover"].forEach((eventName) => {
+  dropzone.addEventListener(eventName, (event) => {
     event.preventDefault();
     dropzone.classList.add("is-dragover");
   });
 });
 
-["dragleave", "drop"].forEach(function (eventName) {
-  dropzone.addEventListener(eventName, function (event) {
+["dragleave", "drop"].forEach((eventName) => {
+  dropzone.addEventListener(eventName, (event) => {
     event.preventDefault();
     dropzone.classList.remove("is-dragover");
   });
 });
 
-dropzone.addEventListener("drop", function (event) {
+dropzone.addEventListener("drop", (event) => {
   const files = event.dataTransfer.files;
   if (!files.length) return;
   fileInput.files = files;
@@ -121,76 +120,56 @@ fileInput.addEventListener("change", refreshSelection);
 
 // --- conversion ---
 function readOptions(file) {
-  const lossless = losslessSwitch.dataset.enabled === "true";
-  const night = nightSwitch.dataset.enabled === "true";
-
-  const sourceDensity = sourceDensitySelect.value;
-  if (!isDensityName(sourceDensity)) {
-    throw new Error("Select a valid source density.");
-  }
-
-  let quality = parseInt(qualityInput.value, 10);
-  if (!Number.isInteger(quality) || quality < 0 || quality > 100) {
-    throw new Error("Quality must be a number between 0 and 100.");
-  }
-
-  const rawName = outputName.value.trim() || fileStem(file.name);
-  const resourceName = sanitizeResourceName(rawName);
-
-  return { lossless, night, sourceDensity, quality, resourceName };
-}
-
-function triggerDownload(blob, downloadName) {
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = downloadName;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.URL.revokeObjectURL(url);
+  return parseOptions({
+    lossless: losslessSwitch.dataset.enabled === "true",
+    night: nightSwitch.dataset.enabled === "true",
+    sourceDensity: sourceDensitySelect.value,
+    quality: qualityInput.value,
+    resourceName: outputName.value.trim() || fileStem(file.name),
+  });
 }
 
 async function runConversion(file) {
   let options;
   try {
     options = readOptions(file);
-  } catch (e) {
+  } catch (error) {
+    setStatus(error.message, true);
     return;
   }
 
   convertButton.disabled = true;
+  setStatus("Converting…");
 
   try {
     if (typeof JSZip === "undefined") {
       throw new Error("JSZip failed to load.");
     }
     const img = await loadImageElement(file);
-    const zip = new JSZip();
-
-    for (const [density, scale] of Object.entries(DENSITY_FACTORS)) {
-      const bytes = await renderDensity(img, scale, options);
-      zip.file(`${drawableDirectoryName(density, options.night)}/${options.resourceName}.webp`, bytes);
-    }
-
-    const blob = await zip.generateAsync({ type: "blob" });
-    const downloadName = `${options.resourceName}_${options.night ? "night_drawables" : "drawables"}.zip`;
-    triggerDownload(blob, downloadName);
+    const rendered = await encodeAllDensities(img, options);
+    const entries = rendered.map(({ density, bytes }) => ({
+      path: `${drawableDirectoryName(density, options.night)}/${options.resourceName}.webp`,
+      bytes,
+    }));
+    const blob = await buildZipArchive(() => new JSZip(), entries);
+    downloadBlob(blob, zipFileName(options.resourceName, options.night));
+    setStatus("Done — check your downloads.");
   } catch (error) {
     console.error(error);
+    setStatus(`Conversion failed: ${error.message}`, true);
   } finally {
     convertButton.disabled = false;
   }
 }
 
-form.addEventListener("submit", async function (event) {
+form.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   const file = selectedFile();
-  if (!file) {
-    return;
-  }
+  if (!file) return;
+
   if (!SUPPORTED_EXTENSIONS.includes(fileExtension(file.name))) {
+    setStatus(`Unsupported file type. Use: ${SUPPORTED_EXTENSIONS.join(", ")}`, true);
     return;
   }
 
