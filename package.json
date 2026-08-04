@@ -5,6 +5,11 @@
   "type": "module",
   "description": "Client-side image-to-Android-WebP-drawables converter",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.8.0"
   }
 }
