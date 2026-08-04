@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io/fs"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"time"
 )
 
 func init() {
@@ -22,10 +24,8 @@ func init() {
 // securityHeaders sets defensive HTTP headers on every response.
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Security-Policy",
-			"default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; "+
-				"img-src 'self' blob: data:; object-src 'none'; base-uri 'self'")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		next.ServeHTTP(w, r)
 	})
@@ -46,10 +46,12 @@ func (n noDirListing) Open(name string) (http.File, error) {
 		return nil, err
 	}
 	if info.IsDir() {
-		if _, err := n.fs.Open(filepath.Join(name, "index.html")); err != nil {
+		index, err := n.fs.Open(filepath.Join(name, "index.html"))
+		if err != nil {
 			f.Close()
 			return nil, fs.ErrPermission
 		}
+		index.Close()
 	}
 	return f, nil
 }
@@ -80,16 +82,25 @@ func main() {
 		log.Printf("Port %d is busy, using %d instead", requested, *port)
 	}
 
+	server := &http.Server{
+		Handler:           securityHeaders(http.FileServer(noDirListing{http.Dir(wd)})),
+		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
 	go func() {
 		<-ctx.Done()
-		fmt.Println("\nServer stopped.")
-		os.Exit(0)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = server.Shutdown(shutdownCtx)
 	}()
 
 	log.Printf("DrawableForge dev server: http://%s", addr)
-	log.Printf("Serving .")
-	log.Fatal(http.Serve(listener, securityHeaders(http.FileServer(noDirListing{http.Dir(wd)}))))
+	log.Printf("Serving %s", wd)
+	if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Fatal(err)
+	}
 }
