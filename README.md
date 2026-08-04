@@ -35,6 +35,11 @@ Static files only. Serve the repo root over HTTP or publish via GitHub Pages. No
 
 Architecture, tests, and the dev server: [`DEV.md`](DEV.md).
 
+```bash
+npm test          # unit tests (node --test)
+npm run lint      # ESLint 10
+```
+
 ## Screenshot
 
 ![Screenshot](screenshot.jpg)

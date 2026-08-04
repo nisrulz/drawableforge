@@ -2,7 +2,7 @@
 
 ## Overview
 
-Takes a source image and outputs zipped Android WebP drawables for ldpi to xxxhdpi. Fully client-side. No backend. No server-side processing. Hostable on GitHub Pages (repo root is the site).
+Takes a source image and outputs zipped Android WebP drawables for ldpi to xxxhdpi. Everything runs client-side: there's no backend and nothing happens server-side. Hostable on GitHub Pages (repo root is the site).
 
 **Stack:** HTML/CSS/JS, Canvas 2D, WASM libwebp (`wasm-webp`), JSZip. A tiny optional Go static server (`main.go`) is used only for local preview.
 
@@ -13,11 +13,16 @@ Takes a source image and outputs zipped Android WebP drawables for ldpi to xxxhd
 | Entry | File | Purpose |
 |-------|------|---------|
 | Site | `index.html` | Static app, served at `/` |
-| Orchestrator | `app.js` | DOM wiring, theme, events, conversion flow (ES module) |
+| Orchestrator | `app.js` | DOM wiring, events, conversion flow (ES module) |
 | Density | `js/density.js` | `DENSITY_FACTORS`, `SOURCE_DENSITY`, sizing and dir naming |
 | Naming | `js/naming.js` | `sanitizeResourceName`, supported extensions, file stem/ext |
-| Encoding | `js/encoding.js` | Image load, canvas resize, lossless/lossy WebP encode |
-| Tests | `tests/*.test.js` | `node --test` for density math and name sanitization |
+| Encoding | `js/encoding.js` | Image load, canvas resize, lossless/lossy WebP encode, parallel density encode |
+| Options | `js/options.js` | `parseOptions`: validate/normalize raw form input |
+| Theme | `js/theme.js` | `applyTheme`, `resolveTheme`, `nextTheme`, icon mapping |
+| ZIP | `js/zip.js` | `buildZipArchive`, `downloadBlob`, `zipFileName` (STORE compression) |
+| Tests | `tests/*.test.js` | `node --test` for density, naming, options, theme, zip |
+| Lint | `eslint.config.js` | ESLint 10 flat config (`npm run lint`) |
+| CI | `.github/workflows/ci.yml` | lint + `npm test` + `go vet`/`go build` on push/PR |
 | Local preview | `main.go` | `go run .` static file server (no conversion) |
 
 **Shell scripts:**
@@ -52,19 +57,20 @@ Each density has a target factor (xxxhdpi=4.0, mdpi=1.0). The source image is tr
 - Canvas 2D `drawImage` with `imageSmoothingEnabled=true`, `imageSmoothingQuality="high"` (high-quality bilinear smoothing).
 
 ### ZIP
-- JSZip in the browser. WebP is already compressed so STORE mode is fine. No temp files.
+- JSZip in the browser. WebP is already compressed, so the archive is built with **STORE** compression (`buildZipArchive` in `js/zip.js`): faster to build, no wasted CPU. No temp files.
 
 ---
 
 ## Tests
 
-Pure logic in `js/density.js` and `js/naming.js` is covered by `node --test`:
+Pure logic in `js/density.js`, `js/naming.js`, `js/options.js`, `js/theme.js`, and `js/zip.js` is covered by `node --test`:
 
 ```bash
 npm test          # runs node --test over tests/*.test.js
+npm run lint      # ESLint 10 (flat config, eslint.config.js)
 ```
 
-No browser required. The modules have no DOM or WASM dependencies.
+No browser required. The modules have no DOM or WASM dependencies. Theme and zip helpers accept injected DOM/zip factories so they are testable in Node.
 
 ---
 
@@ -81,15 +87,14 @@ No browser required. The modules have no DOM or WASM dependencies.
 
 Fully client-side and static. No backend, no auth, no database. Here's how each exposure is handled:
 
-- **Content-Security-Policy**: set via `<meta>` in `index.html` and by the dev server in `main.go` (`securityHeaders`). Tighten this if new inline assets appear.
-- **File-type validation is extension-only** (see `SUPPORTED_EXTENSIONS` in `js/naming.js`). This is an accepted limitation: a non-image renamed to a supported extension passes the gate, but the browser then fails to decode it and the conversion errors out. No untrusted code executes.
-- **No HTML injection / Zip Slip**: all dynamic text uses `textContent`. The resource name is restricted to `[a-z0-9_]` by `sanitizeResourceName`, so download and archive paths can never contain `/` or `..`.
+- **File-type validation is extension-only** (see `SUPPORTED_EXTENSIONS` in `js/naming.js`). This is an accepted limitation: a non-image renamed to a supported extension passes the gate, but the browser then fails to decode it and the conversion errors out. No untrusted code ever runs.
+- **No HTML injection / Zip Slip**: all dynamic text uses `textContent`. The resource name is restricted to `[a-z0-9_]` by `sanitizeResourceName` (`js/naming.js`), so download and archive paths can never contain `/` or `..`.
 - **Vendored assets** (`vendor/`): see `vendor/README.md` for pinning and provenance.
-- The dev server (`main.go`) also sends `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, and disables directory listing.
+- The dev server (`main.go`) sends `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, disables directory listing, and sets request timeouts (`ReadHeaderTimeout`, `IdleTimeout`). Node dependencies are dev-only and `npm audit` is clean.
 
 ---
 
-## Naming Rules (`sanitizeResourceName` in `app.js`)
+## Naming Rules (`sanitizeResourceName` in `js/naming.js`)
 
 `name -> str`: lowercase, `[^a-z0-9_]` to `_`, collapse `_`, strip leading/trailing `_`. If empty, error. If digit-prefixed, prepend `img_`.
 
@@ -121,7 +126,7 @@ Make targets: `make`/`make help` lists all. `make serve`, `make build` (writes `
 
 ## GitHub Pages
 
-Enable Pages with **source = root** of the default branch. `.nojekyll` disables Jekyll so `/vendor` is served untouched. No build step.
+Enable Pages with **source = root** of the default branch. `.nojekyll` keeps Jekyll from touching `/vendor`. No build step.
 
 ---
 
@@ -132,13 +137,22 @@ Enable Pages with **source = root** of the default branch. `.nojekyll` disables 
 ├── index.html              # app markup
 ├── style.css               # theme (formerly modern/style.css)
 ├── app.js                  # client-side pipeline (ES module)
+├── eslint.config.js        # ESLint 10 flat config
 ├── js/
 │   ├── density.js          # density factors, sizing math, dir naming
 │   ├── naming.js           # resource-name sanitization and extension helpers
-│   └── encoding.js         # image load, canvas resize, WebP encode
+│   ├── options.js          # parseOptions: validate/normalize form input
+│   ├── theme.js            # theme state, attribute/icon application
+│   ├── encoding.js         # image load, canvas resize, WebP encode
+│   └── zip.js              # buildZipArchive (STORE), downloadBlob, zipFileName
 ├── tests/
 │   ├── density.test.js     # density math and dir naming
-│   └── naming.test.js      # resource-name sanitization and extension helpers
+│   ├── naming.test.js      # resource-name sanitization and extension helpers
+│   ├── options.test.js     # parseOptions validation
+│   ├── theme.test.js       # theme transitions and attribute application
+│   └── zip.test.js         # archive assembly + STORE compression
+├── .github/
+│   └── workflows/ci.yml    # lint + test + go vet/build
 ├── vendor/
 │   ├── jszip.min.js
 │   ├── webp-wasm.js
@@ -147,7 +161,7 @@ Enable Pages with **source = root** of the default branch. `.nojekyll` disables 
 ├── main.go                 # tiny Go static dev-server
 ├── Makefile                # make dev/serve, build, clean targets
 ├── go.mod
-├── package.json            # type:module + `npm test` (node --test)
+├── package.json            # type:module + `npm test` (node --test) + `npm run lint`
 ├── .nojekyll
 ├── README.md
 ├── DEV.md
@@ -160,4 +174,4 @@ Enable Pages with **source = root** of the default branch. `.nojekyll` disables 
 
 - "Add BMP/TIFF support via WASM decoders"
 - "Show a preview of each generated density before download"
-- "Add a CI workflow that runs `npm test` and `go build`"
+- "Add a progress indicator during conversion"
