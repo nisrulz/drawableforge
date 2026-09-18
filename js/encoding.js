@@ -18,8 +18,14 @@ export function loadImageElement(file) {
 }
 
 export function canvasToWebpBlob(canvas, quality) {
-  return new Promise((resolve) => {
-    canvas.toBlob(resolve, "image/webp", quality / 100);
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) {
+        resolve(blob);
+        return;
+      }
+      reject(new Error("Your browser could not encode this image as WebP."));
+    }, "image/webp", quality / 100);
   });
 }
 
